@@ -21,7 +21,7 @@ class Minimax {
         return score;
     }
 
-    static minimax(playerPieces, enemyPieces, depth, maximisingPlayer) {
+    static minimax(playerPieces, enemyPieces, depth, maximisingPlayer, alpha=-Infinity, beta=Infinity) {
         if (depth == 0 || playerPieces.length == 0 || enemyPieces.length == 0) {
             return Minimax.evaluate(playerPieces, enemyPieces);
         }
@@ -31,12 +31,14 @@ class Minimax {
             for (const piece of enemyPieces) {
                 for (const move of piece.getMoves()) {
                     let pieces = getChild(move, [...playerPieces], [...enemyPieces]);
-                    let evaluation = Minimax.minimax([...pieces[0]], [...pieces[1]], depth - 1, false);
+                    let evaluation = Minimax.minimax([...pieces[0]], [...pieces[1]], depth - 1, false, alpha, beta);
                     if (evaluation > maxEval) {
                         maxEval = evaluation;
                         Minimax.bestPiece = piece;
                         Minimax.bestMove = move;
                     }
+                    alpha = max(alpha, evaluation);
+                    if (beta <= alpha) break;
                 }
             }
             return maxEval;
@@ -45,10 +47,12 @@ class Minimax {
             for (const piece of playerPieces) {
                 for (const move of piece.getMoves()) {
                     let pieces = getChild(move, playerPieces, enemyPieces);
-                    let evaluation = Minimax.minimax([...pieces[0]], [...pieces[1]], depth - 1, true);
+                    let evaluation = Minimax.minimax([...pieces[0]], [...pieces[1]], depth - 1, true, alpha, beta);
                     if (evaluation < minEval) {
                         minEval = evaluation;
                     }
+                    beta = min(beta, evaluation);
+                    if (beta <= alpha) break;
                 }
             }
             return minEval;
@@ -299,7 +303,11 @@ function draw() {
     }
 
     if (!playerTurn) {
-        Minimax.minimax([...Piece.playerPieces], [...Piece.enemyPieces], 6, true);
+        possibleMove = false;
+        for (const piece of Piece.playerPieces) if (piece.getMoves().length > 0) { possibleMove = true; break; }
+        if (!possibleMove) { endGame(false); return; }
+        Minimax.minimax([...Piece.playerPieces], [...Piece.enemyPieces], 8, true);
+        if (Minimax.bestMove == null) { endGame(true); return; }
         for (let i = 0; i < Minimax.bestMove.enemyPieces.length; i++) {
             if (Minimax.bestMove.enemyPieces[i].tile.piece.player) Piece.playerPieces.splice(Piece.playerPieces.indexOf(Minimax.bestMove.enemyPieces[i].tile.piece), 1);
             else Piece.enemyPieces.splice(Piece.enemyPieces.indexOf(Minimax.bestMove.enemyPieces[i].tile.piece), 1);
@@ -312,14 +320,13 @@ function draw() {
 
         if (tile.y == 0 && tile.piece.player || tile.y == 7 && !tile.piece.player) tile.piece.king = true;
 
-        if (Piece.enemyPieces.length == 0) endGame(true)
-        if (Piece.playerPieces.length == 0) endGame(false)
-
         Minimax.bestMove = null;
         Minimax.bestPiece = null;
 
         playerTurn = !playerTurn;
-        return;
+
+        if (Piece.enemyPieces.length == 0) { endGame(true); return; }
+        if (Piece.playerPieces.length == 0) { endGame(false); return; }
     }
 }
 
@@ -365,14 +372,14 @@ function mouseClicked() {
             Tile.hoveredTile.piece = selectedPiece;
             
             if (Tile.hoveredTile.y == 0 && Tile.hoveredTile.piece.player || Tile.hoveredTile.y == 7 && !Tile.hoveredTile.piece.player) Tile.hoveredTile.piece.king = true;
-
-            if (Piece.enemyPieces.length == 0) endGame(true)
-            if (Piece.playerPieces.length == 0) endGame(false)
-
+            
             Tile.resetPossibleMoves();
             selectedPiece = null;
 
             playerTurn = !playerTurn;
+
+            if (Piece.enemyPieces.length == 0) { endGame(true); return; }
+            if (Piece.playerPieces.length == 0) { endGame(false); return; }
         }
     } else if (Tile.hoveredTile.piece != null) {
         if (Tile.hoveredTile.piece.player == false) return;

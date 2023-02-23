@@ -1,6 +1,61 @@
 let selectedPiece;
+let playerTurn = true;
 
 new p5();
+
+class Minimax {
+
+    static bestPiece;
+    static bestMove;
+
+    static evaluate(playerPieces, enemyPieces) {
+        let score = 0;
+        for (let i = 0; i < playerPieces.length; i++) {
+            if (playerPieces[i].king) score -= 2;
+            else score -= 1;
+        }
+        for (let i = 0; i < enemyPieces.length; i++) {
+            if (enemyPieces[i].king) score += 2;
+            else score += 1;
+        }
+        return score;
+    }
+
+    static minimax(playerPieces, enemyPieces, depth, maximisingPlayer) {
+        if (depth == 0 || playerPieces.length == 0 || enemyPieces.length == 0) {
+            return Minimax.evaluate(playerPieces, enemyPieces);
+        }
+
+        if (maximisingPlayer) {
+            let maxEval = -Infinity;
+            for (const piece of enemyPieces) {
+                for (const move of piece.getMoves()) {
+                    let pieces = getChild(move, [...playerPieces], [...enemyPieces]);
+                    let evaluation = Minimax.minimax([...pieces[0]], [...pieces[1]], depth - 1, false);
+                    if (evaluation > maxEval) {
+                        maxEval = evaluation;
+                        Minimax.bestPiece = piece;
+                        Minimax.bestMove = move;
+                    }
+                }
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            for (const piece of playerPieces) {
+                for (const move of piece.getMoves()) {
+                    let pieces = getChild(move, playerPieces, enemyPieces);
+                    let evaluation = Minimax.minimax([...pieces[0]], [...pieces[1]], depth - 1, true);
+                    if (evaluation < minEval) {
+                        minEval = evaluation;
+                    }
+                }
+            }
+            return minEval;
+        }
+
+    }
+}
 
 class Move {
     constructor(x, y) {
@@ -165,7 +220,7 @@ class Tile {
             pop();
         }
 
-        if (Tile.hoveredTile == this) {
+        if (Tile.hoveredTile == this && playerTurn) {
             fill(this.highlight);
             rect(this.x * tileSize, this.y * tileSize, tileSize, tileSize);
         }
@@ -242,6 +297,30 @@ function draw() {
     for (let i = 0; i < Tile.grid.length; i++) {
         Tile.grid[i].draw();
     }
+
+    if (!playerTurn) {
+        Minimax.minimax([...Piece.playerPieces], [...Piece.enemyPieces], 6, true);
+        for (let i = 0; i < Minimax.bestMove.enemyPieces.length; i++) {
+            if (Minimax.bestMove.enemyPieces[i].tile.piece.player) Piece.playerPieces.splice(Piece.playerPieces.indexOf(Minimax.bestMove.enemyPieces[i].tile.piece), 1);
+            else Piece.enemyPieces.splice(Piece.enemyPieces.indexOf(Minimax.bestMove.enemyPieces[i].tile.piece), 1);
+            Minimax.bestMove.enemyPieces[i].tile.piece = null;
+        }
+        let tile = Tile.get(Minimax.bestMove);
+        Minimax.bestPiece.tile.piece = null;
+        tile.piece = Minimax.bestPiece;
+        tile.piece.tile = tile;
+
+        if (tile.y == 0 && tile.piece.player || tile.y == 7 && !tile.piece.player) tile.piece.king = true;
+
+        if (Piece.enemyPieces.length == 0) endGame(true)
+        if (Piece.playerPieces.length == 0) endGame(false)
+
+        Minimax.bestMove = null;
+        Minimax.bestPiece = null;
+
+        playerTurn = !playerTurn;
+        return;
+    }
 }
 
 function endGame(player) {
@@ -255,9 +334,20 @@ function endGame(player) {
 
     setupGrid();
     setupPieces();
+
+    playerTurn = true;
+}
+
+function getChild(move, playerPieces, enemyPieces) {
+    for (let i = 0; i < move.enemyPieces.length; i++) {
+        if (move.enemyPieces[i].tile.piece.player) playerPieces.splice(playerPieces.indexOf(move.enemyPieces[i].tile.piece), 1);
+        else enemyPieces.splice(enemyPieces.indexOf(move.enemyPieces[i].tile.piece), 1);
+    }
+    return [playerPieces, enemyPieces];
 }
 
 function mouseClicked() {
+    if (!playerTurn) return;
     if (selectedPiece != null) {
         if (Tile.hoveredTile.piece == selectedPiece) {
             Tile.resetPossibleMoves();
@@ -281,8 +371,11 @@ function mouseClicked() {
 
             Tile.resetPossibleMoves();
             selectedPiece = null;
+
+            playerTurn = !playerTurn;
         }
     } else if (Tile.hoveredTile.piece != null) {
+        if (Tile.hoveredTile.piece.player == false) return;
         let possibleMoves = Tile.hoveredTile.piece.getMoves();
         selectedPiece = possibleMoves.length == 0 ? null : Tile.hoveredTile.piece;
         Tile.resetPossibleMoves();
@@ -292,5 +385,4 @@ function mouseClicked() {
             tile.enemyPieces = [...move.enemyPieces];
         }
     }
-    
 }
